@@ -1,0 +1,185 @@
+#!bin/bash
+
+# Set up soft coded directory and file paths
+TEST=${TEST:-"$(pwd)/database/genotypes/unknown/unknown-qc-v9"}
+REFERENCE=${REFERENCE:-"$(pwd)/database/genotypes/all-1000g-phase3-chrall-mac5-v2/all-1000g-phase3-chrall-ma$
+HIGHLD=${HIGHLD:-"$(pwd)/database/genotypes/high-ld-b37.ranges"}
+PLINK=${PLINK:-"plink"} 
+OUTDIR=${OUTDIR:-"$(pwd)/database/output_files"}
+
+# Create necessary directories if they don’t exist
+mkdir -p "$(dirname "$TEST")"
+mkdir -p "$(dirname "$REFERENCE")"
+mkdir -p "$(dirname "$HIGHLD")"
+mkdir -p "$OUTDIR"
+
+# Check if PLINK is installed
+if ! command -v plink &> /dev/null; then
+    echo "Error: PLINK not found. Please install PLINK or specify its path."
+    exit 1
+fi
+
+# Extract reference and test snps (second column) and store them alphabetically in new .snps files
+echo
+echo "sort command working..."
+echo
+awk '{print $2}' "${REFERENCE}.bim" | sort > "${OUTDIR}/reference.snps"
+awk '{print $2}' "${TEST}.bim" | sort > "${OUTDIR}/test.snps"
+
+echo 
+echo "line 1"
+echo
+
+# Create a file containing the snps common to both the reference and test datasets 
+comm -12 \
+"${OUTDIR}/reference.snps" \
+"${OUTDIR}/test.snps" \
+> "${OUTDIR}/common_to_both.extract"
+
+echo 
+echo "line 2"
+echo
+
+$PLINK \
+--bfile "${REFERENCE}" \
+--extract "${OUTDIR}/common_to_both.extract" \
+--make-bed \
+--out "${OUTDIR}/reference_common"
+
+echo 
+echo "line 3"
+echo
+
+# Excluding low frequency (MAF < 0.05) snps
+$PLINK \
+--bfile "${OUTDIR}/reference_common" \
+--maf 0.05 \
+--make-bed \
+--out "${OUTDIR}/reference_common_maf5" 
+
+echo 
+echo "line 4"
+echo
+
+# Excluding ambiguous SNPs 
+awk \
+'($5=="T"&&$6=="A")|| \
+($5=="A"&&$6=="T")|| \
+($5=="C"&&$6=="G")|| \
+($5=="G"&&$6=="C")' \
+"${OUTDIR}/reference_common_maf5.bim" | \
+cut -f 2 > "${OUTDIR}/ambiguous.exclude"
+
+echo 
+echo "line 5"
+echo
+
+# Removing ambiguous SNPs from the dataset, new file _noWS is created
+$PLINK \
+--bfile "${OUTDIR}/reference_common_maf5" \
+--exclude "${OUTDIR}/ambiguous.exclude" \
+--make-bed \
+--out "${OUTDIR}/reference_common_maf5_noWS"
+
+echo 
+echo "line 6"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_common_maf5_noWS" \
+--extract "${REFERENCE}.aims" \
+--make-bed \
+--out "${OUTDIR}/reference_common_maf5_noWS_aims"
+
+echo 
+echo "line 7"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_common_maf5_noWS_aims" \
+--make-set "${HIGHLD}" \
+--write-set \
+--out "${OUTDIR}/reference_common_maf5_noWS_aims"
+
+echo 
+echo "line 8"
+echo
+
+# Use PLINK to exclude the set of SNPs from further analyses
+$PLINK \
+--bfile "${OUTDIR}/reference_common_maf5_noWS_aims" \
+--exclude "${OUTDIR}/reference_common_maf5_noWS_aims.set" \
+--make-bed \
+--out "${OUTDIR}/reference_common_maf5_noWS_aims_noLD"
+
+echo 
+echo "line 9"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_common_maf5_noWS_aims_noLD" \
+--indep-pairwise 50 10 0.1 \
+--out "${OUTDIR}/ld_independent"
+
+echo 
+echo "line 10"
+echo
+
+$PLINK \
+--bfile "${REFERENCE}" \
+--extract "${OUTDIR}/ld_independent.prune.in" \
+--make-bed \
+--out "${OUTDIR}/reference_premerge"
+
+echo 
+echo "line 11"
+echo
+
+$PLINK \
+--bfile "${TEST}" \
+--extract "${OUTDIR}/ld_independent.prune.in" \
+--make-bed \
+--out "${OUTDIR}/test_premerge"
+
+echo 
+echo "line 11"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_premerge" \
+--bmerge "${OUTDIR}/test_premerge" \
+--make-bed \
+--out "${OUTDIR}/combined"
+
+echo 
+echo "line 12"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_premerge" \
+--flip "${OUTDIR}/combined-merge.missnp" \
+--make-bed \
+--out "${OUTDIR}/reference_flipped"
+
+echo 
+echo "line 13"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/reference_flipped" \
+--bmerge "${OUTDIR}/test_premerge" \
+--make-bed \
+--out "${OUTDIR}/combined"
+
+echo 
+echo "line 14"
+echo
+
+$PLINK \
+--bfile "${OUTDIR}/combined" \
+--pca \
+--out "${OUTDIR}/gbr_combined"
+
+echo 
+echo "line 15"
+echo "done!"
