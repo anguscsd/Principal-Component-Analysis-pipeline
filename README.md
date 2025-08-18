@@ -3,7 +3,7 @@
 ### Ancestry Matching and Sex Checking
 This project implements pipelines for ancestry matching and sex-checking based on genotype data. It aims to identify individuals whose genetic data aligns with the GBR reference individuals from the 1000 Genomes project and to validate the sex information in a test dataset.
 - Run .R scripts in R-studio
-- Run bash pipelines in command line terminal
+- Run bash pipelines in command line terminal (Mac)
 ### Data
 These pipelines are dependant on the reference and test data (unfortunately, due to privacy concerns they cannot be shared here): ensure PLINK and R-studio have access to the correct files. 
 
