@@ -27,7 +27,7 @@ awk '{print $2}' "${REFERENCE}.bim" | sort > "${OUTDIR}/reference.snps"
 awk '{print $2}' "${TEST}.bim" | sort > "${OUTDIR}/test.snps"
 
 echo 
-echo "line 1"
+echo "line 1" # Line numbers specified to aid debugging
 echo
 
 # Create a file containing the snps common to both the reference and test datasets 
