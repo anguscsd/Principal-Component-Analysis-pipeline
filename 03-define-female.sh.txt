@@ -1,0 +1,55 @@
+#!bin/bash
+
+# Step 1: Load PLINK
+module load plink/1.9
+
+# Define file paths
+TEST=${TEST:-"$(pwd)/database/genotypes/unknown/unknown-qc-v9"}
+OUTDIR=${OUTDIR:-"$(pwd)/database/output_files"}
+PLINK=${PLINK:-"plink"}
+
+mkdir -p "$(dirname "$TEST")"
+mkdir -p "$OUTDIR"
+
+# Step 2: Perform Quality Control (QC) on the test dataset
+echo "Performing QC on the test dataset..."
+$PLINK \
+--bfile "$TEST" \
+--geno 0.05 \
+--mind 0.1 \
+--maf 0.01 \
+--hwe 1e-6 \
+--make-bed \
+--out "$OUTDIR/test_qc"
+
+# Step 3: Split X chromosome to properly handle pseudoautosomal regions (PAR)
+echo "Splitting X chromosome..."
+$PLINK \
+--bfile "${OUTDIR}/test_qc" \
+--split-x hg19 no-fail \
+--make-bed \
+--out "${OUTDIR}/test_splitx"
+≈
+# Step 4: Perform sex check
+# Output file test.sexcheck is used in R script
+echo "Running sex check..."
+$PLINK \
+--bfile "${OUTDIR}/test_splitx" \
+--check-sex \
+--out "${OUTDIR}/test"
+
+# Step 6: Filter dataset to keep only females
+echo "Creating female-only dataset..."
+$PLINK \
+--bfile "${OUTDIR}/test_splitx" \
+--keep "${OUTDIR}/females.keep" \
+--make-bed \
+--out "${OUTDIR}/test_females"
+
+# Counting number of males and females
+echo
+echo "summary of sex check"
+awk 'NR > 1 {count[$3]++} END {print "MALES:", count[1] ? count[1] : 0; print "FEMALES:", count[2] ? count[2] : 0}' ${OUTDIR}/test.sexcheck
+
+echo
+echo "Pipeline completed successfully!"
